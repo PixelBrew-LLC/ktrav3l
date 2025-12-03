@@ -19,9 +19,17 @@ func init() {
 func main() {
 	r := gin.Default()
 
+	// Aumentar el límite de tamaño del body para archivos (10MB)
+	r.MaxMultipartMemory = 10 << 20 // 10 MB
+
 	// CORS middleware
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		// Permitir ktrav3l.com y localhost para desarrollo
+		if origin == "https://ktrav3l.com" || origin == "https://www.ktrav3l.com" ||
+			origin == "http://localhost:3001" || origin == "http://localhost:3000" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
