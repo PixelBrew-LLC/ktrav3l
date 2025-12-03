@@ -1,0 +1,5 @@
+GET http://localhost:3000/me
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjM1MTY1MjgsInN1YiI6IjY0NmM0NGI4LTk1OGItNDdiMC04M2RkLWZjODZhYjlmMWUxZCJ9.M_aHwFNrVvosiy6_qZbgtpzIDdKJh5JPrS6vK8urDyc
+Content-Type: application/json
+
+
