@@ -52,7 +52,7 @@ func (s *EmailService) formatSpanishDate(t time.Time) string {
 }
 
 func (s *EmailService) getEmailHeader() string {
-	logoURL := config.Env.FrontendURL + "/logo.svg"
+	logoURL := config.Env.FrontendURL + "/logo.png"
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html lang="es">
 <head>
