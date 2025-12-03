@@ -25,12 +25,38 @@ func main() {
 	// CORS middleware
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		// Permitir ktrav3l.com y localhost para desarrollo
-		if origin == "https://ktrav3l.com" || origin == "https://www.ktrav3l.com" ||
-			origin == "http://localhost:3001" || origin == "http://localhost:3000" {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+
+		// Log para debug
+		if origin != "" {
+			println("Origin recibido:", origin)
 		}
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		// Permitir ktrav3l.com y localhost para desarrollo
+		allowedOrigins := []string{
+			"https://ktrav3l.com",
+			"https://www.ktrav3l.com",
+			"http://ktrav3l.com",
+			"http://www.ktrav3l.com",
+		}
+
+		// Verificar si el origin está permitido
+		originAllowed := false
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				originAllowed = true
+				break
+			}
+		}
+
+		// Siempre establecer headers CORS
+		if originAllowed && origin != "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		} else if origin == "" {
+			// Si no hay origin, permitir cualquiera (para peticiones directas)
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
