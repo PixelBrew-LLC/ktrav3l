@@ -24,9 +24,11 @@ const formSchema = z.object({
   phoneNumber: z.string().regex(/^\d{3}-\d{3}-\d{4}$/, 'Formato: ###-###-####'),
   appointmentTypeID: z.string().min(1, 'Selecciona un tipo de cita'),
   bankTransfer: z.string().min(1, 'Selecciona un banco'),
-  receipt: z.instanceof(FileList)
-    .refine((files) => files.length > 0, 'Debes subir el comprobante')
-    .refine((files) => files[0]?.size <= 5 * 1024 * 1024, 'El archivo debe ser menor a 5 MB'),
+  receipt: typeof window !== 'undefined' 
+    ? z.instanceof(FileList)
+        .refine((files) => files.length > 0, 'Debes subir el comprobante')
+        .refine((files) => files[0]?.size <= 5 * 1024 * 1024, 'El archivo debe ser menor a 5 MB')
+    : z.any(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -323,7 +325,7 @@ export default function Home() {
                 <div>
                   <Label htmlFor="receipt">Comprobante de Pago (JPG, PNG, PDF)</Label>
                   <Input id="receipt" type="file" accept=".jpg,.jpeg,.png,.pdf" {...register('receipt')} />
-                  {errors.receipt && <p className="text-xs text-red-500 mt-1">{errors.receipt.message}</p>}
+                  {errors.receipt && <p className="text-xs text-red-500 mt-1">{errors.receipt.message?.toString()}</p>}
                 </div>
 
                 {/* Botón solo visible en desktop */}
