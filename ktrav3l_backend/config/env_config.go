@@ -1,6 +1,8 @@
 package config
 
 type EnvConfig struct {
+	//Environment
+	Environment string
 	// Server
 	Port string
 	// Database
