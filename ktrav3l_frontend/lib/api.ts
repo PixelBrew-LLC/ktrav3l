@@ -1,6 +1,25 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+// Para runtime: detectar si estamos en el navegador y usar window.location
+const getApiUrl = () => {
+  // Si está definida en build time, usarla
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // Si estamos en el navegador, detectar el dominio
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'ktrav3l.com' || hostname === 'www.ktrav3l.com') {
+      return 'https://api.ktrav3l.com';
+    }
+  }
+  
+  // Fallback a localhost
+  return 'http://localhost:3000';
+};
+
+const API_URL = getApiUrl();
 
 export const api = axios.create({
   baseURL: API_URL,
