@@ -16,24 +16,28 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "KTravel - Reserva tu Cita",
   description: "Reserva tu cita facilmente.",
+  metadataBase: new URL("https://ktrav3l.com"),
   openGraph: {
     title: "KTravel - Reserva tu Cita",
     description: "Reserva tu cita facilmente.",
+    url: "https://ktrav3l.com",
+    siteName: "KTravel",
     images: [
       {
-        url: "/front_page.jpg",
+        url: "https://ktrav3l.com/front_page.jpg",
         width: 1200,
         height: 630,
         alt: "KTravel",
       },
     ],
+    locale: "es_ES",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "KTravel - Reserva tu Cita",
     description: "Reserva tu cita facilmente.",
-    images: ["/front_page.jpg"],
+    images: ["https://ktrav3l.com/front_page.jpg"],
   },
 };
 
