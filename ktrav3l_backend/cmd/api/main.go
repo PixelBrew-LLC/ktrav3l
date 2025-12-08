@@ -37,6 +37,7 @@ func main() {
 			"https://www.ktrav3l.com",
 			"http://ktrav3l.com",
 			"http://www.ktrav3l.com",
+			"http://localhost:3001",
 		}
 
 		// Verificar si el origin está permitido
