@@ -255,9 +255,10 @@ func MoveAppointment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format"})
 		return
 	}
+	newDateOnly := models.NewDateOnly(newDate)
 
 	// Verificar si el nuevo horario está disponible según reglas de disponibilidad
-	dayOfWeek := int(newDate.Weekday())
+	dayOfWeek := int(newDateOnly.Time.Weekday())
 
 	// 1. Verificar reglas de día de semana
 	var weekdayRules []models.AvailabilityRule
@@ -278,7 +279,7 @@ func MoveAppointment(c *gin.Context) {
 
 	// 2. Verificar reglas de fecha específica
 	var specificDateRules []models.AvailabilityRule
-	specificDate := time.Date(newDate.Year(), newDate.Month(), newDate.Day(), 0, 0, 0, 0, time.UTC)
+	specificDate := time.Date(newDateOnly.Time.Year(), newDateOnly.Time.Month(), newDateOnly.Time.Day(), 0, 0, 0, 0, time.UTC)
 	initializers.DB.Where("specific_date = ?", specificDate).Find(&specificDateRules)
 
 	for _, rule := range specificDateRules {
@@ -297,7 +298,7 @@ func MoveAppointment(c *gin.Context) {
 	// 3. Verificar que no haya otra cita en ese horario
 	var existingAppointment models.Appointment
 	result := initializers.DB.Where("appointment_date = ? AND appointment_hour = ? AND id != ? AND status != ?",
-		newDate, body.NewHour, id, models.StatusRejected).First(&existingAppointment)
+		newDateOnly, body.NewHour, id, models.StatusRejected).First(&existingAppointment)
 
 	if result.Error == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Time slot already taken"})
@@ -306,7 +307,7 @@ func MoveAppointment(c *gin.Context) {
 
 	// 4. Filtrar horas pasadas si es hoy
 	now := time.Now()
-	isToday := newDate.Year() == now.Year() && newDate.Month() == now.Month() && newDate.Day() == now.Day()
+	isToday := newDateOnly.Time.Year() == now.Year() && newDateOnly.Time.Month() == now.Month() && newDateOnly.Time.Day() == now.Day()
 	if isToday && body.NewHour <= now.Hour() {
 		c.JSON(http.StatusConflict, gin.H{"error": "Cannot move to a past hour"})
 		return
@@ -317,7 +318,7 @@ func MoveAppointment(c *gin.Context) {
 	oldHour := appointment.AppointmentHour
 
 	// Actualizar la cita
-	appointment.AppointmentDate = newDate
+	appointment.AppointmentDate = newDateOnly
 	appointment.AppointmentHour = body.NewHour
 
 	// Actualizar nota administrativa si se provee
@@ -331,7 +332,7 @@ func MoveAppointment(c *gin.Context) {
 	}
 
 	// Enviar email al cliente notificando el cambio
-	go SendAppointmentMovedEmail(appointment, oldDate, oldHour)
+	go SendAppointmentMovedEmail(appointment, oldDate.Time, oldHour)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":     "Appointment moved successfully",
@@ -388,13 +389,13 @@ func GetCalendarData(c *gin.Context) {
 	}
 
 	for _, app := range appointments {
-		dateKey := app.AppointmentDate.Format("2006-01-02")
+		dateKey := app.AppointmentDate.Time.Format("2006-01-02")
 
 		// Formatear fecha en español
-		dayName := app.AppointmentDate.Format("Monday")
-		monthName := app.AppointmentDate.Format("January")
-		day := app.AppointmentDate.Format("2")
-		year := app.AppointmentDate.Format("2006")
+		dayName := app.AppointmentDate.Time.Format("Monday")
+		monthName := app.AppointmentDate.Time.Format("January")
+		day := app.AppointmentDate.Time.Format("2")
+		year := app.AppointmentDate.Time.Format("2006")
 
 		formattedDate := daysES[dayName] + ", " + day + " de " + monthsES[monthName] + " de " + year
 
@@ -505,7 +506,7 @@ func SendAppointmentMovedEmail(appointment models.Appointment, oldDate time.Time
 	emailService := services.NewEmailService()
 
 	oldDateFormatted := formatSpanishDate(oldDate)
-	newDateFormatted := formatSpanishDate(appointment.AppointmentDate)
+	newDateFormatted := formatSpanishDate(appointment.AppointmentDate.Time)
 
 	if err := emailService.SendAppointmentMoved(&appointment, oldDateFormatted, newDateFormatted, oldHour, appointment.AppointmentHour); err != nil {
 		// Log error but don't fail the request

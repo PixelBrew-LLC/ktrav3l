@@ -34,6 +34,8 @@ export default function AppointmentsTablePage() {
   const [showApprove, setShowApprove] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [showMove, setShowMove] = useState(false);
+  const [showDone, setShowDone] = useState(false);
+  const [appointmentToComplete, setAppointmentToComplete] = useState<any>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [meetingLink, setMeetingLink] = useState('');
   const [adminNote, setAdminNote] = useState('');
@@ -207,10 +209,13 @@ export default function AppointmentsTablePage() {
     }
   };
 
-  const handleMarkDone = async (id: string) => {
+  const handleMarkDone = async () => {
+    if (!appointmentToComplete) return;
     setLoading(true);
     try {
-      await api.post(`/admin/appointments/${id}/done`);
+      await api.post(`/admin/appointments/${appointmentToComplete.ID}/done`);
+      setShowDone(false);
+      setAppointmentToComplete(null);
       loadAppointments();
       toast.success('Cita marcada como completada');
     } catch (error: any) {
@@ -222,11 +227,18 @@ export default function AppointmentsTablePage() {
 
   const handleDateSelect = async (date: Date | undefined) => {
     if (!date) return;
-    setNewDate(date);
+    
+    // Normalizar la fecha para evitar problemas de timezone
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    setNewDate(normalizedDate);
     setNewHour(undefined);
 
     try {
-      const formatted = format(date, 'yyyy-MM-dd');
+      const year = normalizedDate.getFullYear();
+      const month = String(normalizedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(normalizedDate.getDate()).padStart(2, '0');
+      const formatted = `${year}-${month}-${day}`;
+      
       const res = await api.get(`/appointments/available-hours?date=${formatted}`);
       setAvailableHours(res.data.availableHours || []);
     } catch (error) {
@@ -243,8 +255,13 @@ export default function AppointmentsTablePage() {
     
     setLoading(true);
     try {
+      const year = newDate.getFullYear();
+      const month = String(newDate.getMonth() + 1).padStart(2, '0');
+      const day = String(newDate.getDate()).padStart(2, '0');
+      const formattedDate = `${year}-${month}-${day}`;
+      
       await api.patch(`/admin/appointments/${selectedAppointment.ID}/move`, {
-        newDate: format(newDate, 'yyyy-MM-dd'),
+        newDate: formattedDate,
         newHour: newHour,
         adminNote: moveNote || undefined,
       });
@@ -415,7 +432,10 @@ export default function AppointmentsTablePage() {
                           </>
                         )}
                         {apt.Status === 'approved' && (
-                          <DropdownMenuItem onClick={() => handleMarkDone(apt.ID)} disabled={loading}>
+                          <DropdownMenuItem onClick={() => {
+                            setAppointmentToComplete(apt);
+                            setShowDone(true);
+                          }} disabled={loading}>
                             Completar
                           </DropdownMenuItem>
                         )}
@@ -480,7 +500,7 @@ export default function AppointmentsTablePage() {
                       </div>
                       <div className="space-y-1">
                         <p className="text-sm font-medium text-muted-foreground">Fecha de Cita</p>
-                        <p className="text-base font-semibold">
+                        <p className="text-base font-semibold capitalize">
                           {format(new Date(selectedAppointment.AppointmentDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: es })} - {formatHour12(selectedAppointment.AppointmentHour)}
                         </p>
                       </div>
@@ -767,6 +787,33 @@ export default function AppointmentsTablePage() {
                 Cancelar
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmación - Completar Cita */}
+      <Dialog open={showDone} onOpenChange={setShowDone}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Completar Cita</DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro que deseas marcar esta cita como completada?
+            </DialogDescription>
+          </DialogHeader>
+          {appointmentToComplete && (
+            <div className="space-y-2">
+              <p><strong>Cliente:</strong> {appointmentToComplete.FirstName} {appointmentToComplete.LastName}</p>
+              <p><strong>Tipo:</strong> {appointmentToComplete.AppointmentType?.Name}</p>
+              <p><strong>Fecha:</strong> {format(new Date(appointmentToComplete.AppointmentDate), "dd 'de' MMMM 'de' yyyy", { locale: es })} a las {appointmentToComplete.AppointmentHour}:00</p>
+            </div>
+          )}
+          <div className="flex gap-2 mt-4">
+            <Button onClick={handleMarkDone} disabled={loading} className="flex-1">
+              {loading ? 'Completando...' : 'Confirmar'}
+            </Button>
+            <Button variant="outline" onClick={() => setShowDone(false)} disabled={loading}>
+              Cancelar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

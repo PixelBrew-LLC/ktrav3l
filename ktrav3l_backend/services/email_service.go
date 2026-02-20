@@ -211,7 +211,7 @@ func (s *EmailService) sendEmail(to, subject, body string) error {
 func (s *EmailService) SendAppointmentConfirmation(appointment *models.Appointment) error {
 	subject := "Confirmación de reserva - " + appointment.ShortID
 
-	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate)
+	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate.Time)
 	appointmentTime := fmt.Sprintf("%02d:00", appointment.AppointmentHour)
 
 	phoneFormatted := fmt.Sprintf("+1 (%s) %s-%s",
@@ -275,7 +275,7 @@ func (s *EmailService) SendAppointmentConfirmation(appointment *models.Appointme
 func (s *EmailService) SendAppointmentApproved(appointment *models.Appointment) error {
 	subject := "¡Tu reserva ha sido aprobada! - " + appointment.ShortID
 
-	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate)
+	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate.Time)
 	appointmentTime := fmt.Sprintf("%02d:00", appointment.AppointmentHour)
 
 	phoneFormatted := fmt.Sprintf("+1 (%s) %s-%s",
@@ -356,7 +356,7 @@ func (s *EmailService) SendAppointmentApproved(appointment *models.Appointment) 
 func (s *EmailService) SendAppointmentRejected(appointment *models.Appointment, reason string) error {
 	subject := "Información sobre tu reserva - " + appointment.ShortID
 
-	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate)
+	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate.Time)
 	appointmentTime := fmt.Sprintf("%02d:00", appointment.AppointmentHour)
 
 	// Construir sección de nota del admin

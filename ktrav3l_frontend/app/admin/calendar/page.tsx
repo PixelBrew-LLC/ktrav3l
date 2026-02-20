@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import api from '@/lib/api';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DayButton } from 'react-day-picker';
 import { cn } from '@/lib/utils';
@@ -29,11 +29,14 @@ export default function CalendarAdminPage() {
   const [showApprove, setShowApprove] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [showMove, setShowMove] = useState(false);
+  const [showDone, setShowDone] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [meetingLink, setMeetingLink] = useState('');
   const [adminNote, setAdminNote] = useState('');
-  const [newDate, setNewDate] = useState('');
-  const [newHour, setNewHour] = useState('');
+  const [newDate, setNewDate] = useState<Date>();
+  const [newHour, setNewHour] = useState<number>();
+  const [availableHours, setAvailableHours] = useState<number[]>([]);
+  const [moveNote, setMoveNote] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -180,6 +183,7 @@ export default function CalendarAdminPage() {
     setLoading(true);
     try {
       await api.post(`/admin/appointments/${selectedAppointment.id}/done`);
+      setShowDone(false);
       setShowDetails(false);
       loadCalendarData();
       toast.success('Cita marcada como completada');
@@ -190,20 +194,55 @@ export default function CalendarAdminPage() {
     }
   };
 
+  const handleDateSelect = async (date: Date | undefined) => {
+    if (!date) return;
+    
+    // Normalizar la fecha para evitar problemas de timezone
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    setNewDate(normalizedDate);
+    setNewHour(undefined);
+
+    try {
+      const year = normalizedDate.getFullYear();
+      const month = String(normalizedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(normalizedDate.getDate()).padStart(2, '0');
+      const formatted = `${year}-${month}-${day}`;
+      
+      const res = await api.get(`/appointments/available-hours?date=${formatted}`);
+      setAvailableHours(res.data.availableHours || []);
+    } catch (error) {
+      console.error('Error loading available hours:', error);
+      toast.error('Error al cargar horas disponibles');
+    }
+  };
+
   const handleMove = async () => {
-    if (!selectedAppointment || !newDate || !newHour) return;
+    if (!selectedAppointment || !newDate || newHour === undefined) {
+      toast.error('Por favor selecciona fecha y hora');
+      return;
+    }
+    
     setLoading(true);
     try {
+      const year = newDate.getFullYear();
+      const month = String(newDate.getMonth() + 1).padStart(2, '0');
+      const day = String(newDate.getDate()).padStart(2, '0');
+      const formattedDate = `${year}-${month}-${day}`;
+      
       await api.patch(`/admin/appointments/${selectedAppointment.id}/move`, {
-        newDate,
-        newHour: parseInt(newHour),
+        newDate: formattedDate,
+        newHour: newHour,
+        adminNote: moveNote || undefined,
       });
       setShowMove(false);
       setShowDetails(false);
+      setNewDate(undefined);
+      setNewHour(undefined);
+      setMoveNote('');
       loadCalendarData();
       toast.success('Cita movida exitosamente');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Error moviendo cita');
+      toast.error(error.response?.data?.error || 'Error al mover la cita');
     } finally {
       setLoading(false);
     }
@@ -481,7 +520,7 @@ export default function CalendarAdminPage() {
                   </>
                 )}
                 {selectedAppointment.status === 'approved' && (
-                  <Button onClick={handleMarkDone} disabled={loading}>
+                  <Button onClick={() => setShowDone(true)} disabled={loading}>
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -550,8 +589,8 @@ export default function CalendarAdminPage() {
                         <p className="text-base font-semibold">{selectedAppointment.firstName} {selectedAppointment.lastName}</p>
                       </div>
                       <div className="space-y-1">
-                        <p className="text-sm font-medium text-muted-foreground">Fecha de Cita</p>
-                        <p className="text-base font-semibold">{selectedAppointment.date} - {formatHour12(selectedAppointment.hour)}</p>
+                        <p className="text-sm font-medium text-muted-foreground">Tipo de Servicio</p>
+                        <p className="text-base font-semibold">{selectedAppointment.type}</p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-sm font-medium text-muted-foreground">Banco de Transferencia</p>
@@ -698,29 +737,129 @@ export default function CalendarAdminPage() {
       </Dialog>
 
       {/* Modal de mover */}
-      <Dialog open={showMove} onOpenChange={setShowMove}>
-        <DialogContent>
+      <Dialog open={showMove} onOpenChange={(open) => {
+        setShowMove(open);
+        if (!open) {
+          setNewDate(undefined);
+          setNewHour(undefined);
+          setMoveNote('');
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Mover Cita</DialogTitle>
-            <DialogDescription>Selecciona la nueva fecha y hora</DialogDescription>
+            <DialogDescription>
+              Selecciona una nueva fecha y hora disponible para la cita
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Calendario */}
             <div>
-              <Label>Nueva Fecha</Label>
-              <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+              <Label>Selecciona la Nueva Fecha</Label>
+              <div className="flex justify-center mt-2">
+                <Calendar
+                  mode="single"
+                  selected={newDate}
+                  onSelect={handleDateSelect}
+                  disabled={(date) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const checkDate = new Date(date);
+                    checkDate.setHours(0, 0, 0, 0);
+                    return checkDate < today;
+                  }}
+                  locale={es}
+                  className="rounded-md border"
+                />
+              </div>
             </div>
+
+            {/* Mostrar fecha seleccionada */}
+            {newDate && (
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
+                <p className="font-semibold text-blue-900">
+                  {format(newDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: es })}
+                </p>
+              </div>
+            )}
+
+            {/* Horas disponibles */}
+            {newDate && (
+              <div>
+                <Label>Selecciona la Nueva Hora</Label>
+                {availableHours.length === 0 ? (
+                  <p className="text-sm text-gray-500 mt-2">No hay horas disponibles para esta fecha</p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2 mt-2">
+                    {availableHours.map((hour) => (
+                      <Button
+                        key={hour}
+                        variant={newHour === hour ? 'default' : 'outline'}
+                        onClick={() => setNewHour(hour)}
+                        className="h-12"
+                      >
+                        {formatHour12(hour)}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Nota del administrador (opcional) */}
             <div>
-              <Label>Nueva Hora</Label>
-              <Input type="number" min="9" max="17" value={newHour} onChange={(e) => setNewHour(e.target.value)} />
+              <Label>Nota para el Cliente (Opcional)</Label>
+              <Textarea
+                value={moveNote}
+                onChange={(e) => setMoveNote(e.target.value)}
+                placeholder="Ej: Por favor confirma que puedes asistir en este nuevo horario"
+                rows={3}
+              />
             </div>
+
+            {/* Botones */}
             <div className="flex gap-2">
-              <Button onClick={handleMove} disabled={!newDate || !newHour || loading}>
-                Mover
+              <Button 
+                onClick={handleMove} 
+                disabled={!newDate || newHour === undefined || loading}
+              >
+                {loading ? 'Moviendo...' : 'Mover Cita'}
               </Button>
-              <Button variant="outline" onClick={() => setShowMove(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowMove(false)}
+                disabled={loading}
+              >
                 Cancelar
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmación - Marcar como Completada */}
+      <Dialog open={showDone} onOpenChange={setShowDone}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Completar Cita</DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro que deseas marcar esta cita como completada?
+            </DialogDescription>
+          </DialogHeader>
+          {selectedAppointment && selectedAppointment.date && (
+            <div className="space-y-2">
+              <p><strong>Cliente:</strong> {selectedAppointment.firstName} {selectedAppointment.lastName}</p>
+              <p><strong>Tipo:</strong> {selectedAppointment.type}</p>
+              <p><strong>Fecha:</strong> {selectedAppointment.date} a las {selectedAppointment.hour}:00</p>
+            </div>
+          )}
+          <div className="flex gap-2 mt-4">
+            <Button onClick={handleMarkDone} disabled={loading} className="flex-1">
+              {loading ? 'Completando...' : 'Confirmar'}
+            </Button>
+            <Button variant="outline" onClick={() => setShowDone(false)} disabled={loading}>
+              Cancelar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

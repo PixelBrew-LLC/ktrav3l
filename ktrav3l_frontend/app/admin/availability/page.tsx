@@ -89,8 +89,14 @@ export default function AvailabilityPage() {
   const saveSpecificDateRule = async (date: Date, unavailableHours: number[], allDay: boolean) => {
     setLoading(true);
     try {
+      // Formatear la fecha en la zona horaria local sin conversión a UTC
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const localDate = `${year}-${month}-${day}`;
+      
       await api.post('/admin/availability-rules/specific-date', {
-        specificDate: format(date, 'yyyy-MM-dd'),
+        specificDate: localDate,
         unavailableHours,
         allDay,
       });
@@ -256,11 +262,18 @@ export default function AvailabilityPage() {
 
                   <SpecificDateConfig
                     date={selectedDate}
-                    existingRule={specificDateRules.find(
-                      rule => rule.SpecificDate && 
-                      format(new Date(rule.SpecificDate.includes('T') ? rule.SpecificDate : rule.SpecificDate + 'T00:00:00'), 'yyyy-MM-dd') === 
-                      format(selectedDate, 'yyyy-MM-dd')
-                    )}
+                    existingRule={specificDateRules.find(rule => {
+                      if (!rule.SpecificDate) return false;
+                      
+                      // Comparar fechas en formato local yyyy-MM-dd
+                      const ruleDate = rule.SpecificDate.split('T')[0]; // Obtener solo la parte de fecha
+                      const year = selectedDate.getFullYear();
+                      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                      const day = String(selectedDate.getDate()).padStart(2, '0');
+                      const selectedDateStr = `${year}-${month}-${day}`;
+                      
+                      return ruleDate === selectedDateStr;
+                    })}
                     onSave={(hours, allDay) => saveSpecificDateRule(selectedDate, hours, allDay)}
                     loading={loading}
                   />
@@ -279,8 +292,12 @@ export default function AvailabilityPage() {
                         let parsedDate: Date | null = null;
                         
                         try {
-                          // El backend puede devolver "2025-12-24" o "2025-12-24T00:00:00Z"
-                          parsedDate = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+                          // Parsear la fecha en zona horaria local, no UTC
+                          // Extraer solo la parte de fecha yyyy-MM-dd
+                          const datePart = dateStr.split('T')[0];
+                          const [year, month, day] = datePart.split('-').map(Number);
+                          parsedDate = new Date(year, month - 1, day);
+                          
                           displayDate = format(
                             parsedDate, 
                             "dd 'de' MMMM 'de' yyyy", 

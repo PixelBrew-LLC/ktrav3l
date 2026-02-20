@@ -1,8 +1,6 @@
 package models
 
 import (
-	"time"
-
 	uuid "github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -37,7 +35,7 @@ type Appointment struct {
 	LastName          string            `gorm:"not null"`
 	Email             string            `gorm:"not null"`
 	PhoneNumber       string            `gorm:"not null;size:12"` // ###-###-####
-	AppointmentDate   time.Time         `gorm:"not null"`
+	AppointmentDate   DateOnly          `gorm:"not null"`
 	AppointmentHour   int               `gorm:"not null"` // Hora en formato 24h (0-23)
 	AppointmentTypeID uint              `gorm:"not null"`
 	AppointmentType   AppointmentType   `gorm:"foreignKey:AppointmentTypeID"`

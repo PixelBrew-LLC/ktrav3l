@@ -59,11 +59,12 @@ func CreateAppointment(c *gin.Context) {
 	}
 
 	// Parsear fecha y hora
-	appointmentDate, err := time.Parse("2006-01-02", appointmentDateStr)
+	parsedDate, err := time.Parse("2006-01-02", appointmentDateStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format"})
 		return
 	}
+	appointmentDate := models.NewDateOnly(parsedDate)
 
 	appointmentHour, err := strconv.Atoi(appointmentHourStr)
 	if err != nil || appointmentHour < 0 || appointmentHour > 23 {
@@ -100,7 +101,7 @@ func CreateAppointment(c *gin.Context) {
 	}
 
 	// Verificar reglas de disponibilidad con el nuevo sistema
-	dayOfWeek := int(appointmentDate.Weekday())
+	dayOfWeek := int(appointmentDate.Time.Weekday())
 
 	// Verificar reglas de día de semana
 	var weekdayRules []models.AvailabilityRule
@@ -121,7 +122,7 @@ func CreateAppointment(c *gin.Context) {
 
 	// Verificar reglas de fecha específica
 	var specificDateRules []models.AvailabilityRule
-	specificDate := time.Date(appointmentDate.Year(), appointmentDate.Month(), appointmentDate.Day(), 0, 0, 0, 0, time.UTC)
+	specificDate := time.Date(appointmentDate.Time.Year(), appointmentDate.Time.Month(), appointmentDate.Time.Day(), 0, 0, 0, 0, time.UTC)
 	initializers.DB.Where("specific_date = ?", specificDate).Find(&specificDateRules)
 
 	for _, rule := range specificDateRules {
@@ -240,7 +241,7 @@ func GetAppointmentByShortID(c *gin.Context) {
 		"lastName":        appointment.LastName,
 		"email":           appointment.Email,
 		"phoneNumber":     phoneFormatted,
-		"appointmentDate": appointment.AppointmentDate.Format("2006-01-02"),
+		"appointmentDate": appointment.AppointmentDate,
 		"appointmentHour": appointment.AppointmentHour,
 		"appointmentType": appointment.AppointmentType.Name,
 		"bankTransfer":    appointment.BankTransfer,
