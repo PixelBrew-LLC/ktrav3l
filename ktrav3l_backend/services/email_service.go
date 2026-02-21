@@ -471,7 +471,7 @@ func (s *EmailService) SendAppointmentMoved(appointment *models.Appointment, old
 
 // SendNewAppointmentNotification envía email al admin cuando se crea una nueva cita pública
 func (s *EmailService) SendNewAppointmentNotification(appointment *models.Appointment) error {
-	adminEmail := "victormanuer2010@gmail.com"
+	adminEmail := "trav3l.asesoria@gmail.com"
 	subject := "Nueva reserva recibida - " + appointment.ShortID
 
 	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate.Time)
