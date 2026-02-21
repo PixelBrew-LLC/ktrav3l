@@ -13,10 +13,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import api from '@/lib/api';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Plus, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { formatHour12 } from '@/lib/time-utils';
+import { formatHour12, formatPhoneDisplay } from '@/lib/time-utils';
 import { toast } from 'sonner';
 
 export default function AppointmentsTablePage() {
@@ -45,9 +45,27 @@ export default function AppointmentsTablePage() {
   const [moveNote, setMoveNote] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Admin create appointment state
+  const [showAdminCreate, setShowAdminCreate] = useState(false);
+  const [appointmentTypes, setAppointmentTypes] = useState<any[]>([]);
+  const [createForm, setCreateForm] = useState({
+    firstName: '', lastName: '', email: '', phoneNumber: '',
+    appointmentDate: '', appointmentHour: -1, appointmentTypeId: '',
+    meetingLink: '', adminNote: '', meetingPlatformId: '',
+  });
+  const [createAvailableHours, setCreateAvailableHours] = useState<number[]>([]);
+  const [createDate, setCreateDate] = useState<Date>();
+
+  // Platform assignment state
+  const [showPlatform, setShowPlatform] = useState(false);
+  const [meetingPlatforms, setMeetingPlatforms] = useState<any[]>([]);
+  const [selectedPlatformId, setSelectedPlatformId] = useState('');
+
   useEffect(() => {
     loadBankAccounts();
     loadAppointments();
+    loadAppointmentTypes();
+    loadMeetingPlatforms();
   }, []);
 
   useEffect(() => {
@@ -68,7 +86,7 @@ export default function AppointmentsTablePage() {
       });
       const contentType = response.headers['content-type'];
       const url = URL.createObjectURL(response.data);
-      
+
       // Si es PDF, agregar .pdf al final para que la lógica de detección funcione
       if (contentType === 'application/pdf') {
         setReceiptUrl(url + '#.pdf');
@@ -113,6 +131,24 @@ export default function AppointmentsTablePage() {
     }
   };
 
+  const loadAppointmentTypes = async () => {
+    try {
+      const res = await api.get('/admin/appointment-types');
+      setAppointmentTypes(res.data.appointmentTypes || []);
+    } catch (error) {
+      console.error('Error loading appointment types:', error);
+    }
+  };
+
+  const loadMeetingPlatforms = async () => {
+    try {
+      const res = await api.get('/admin/meeting-platforms');
+      setMeetingPlatforms((res.data.meetingPlatforms || []).filter((p: any) => p.IsActive));
+    } catch (error) {
+      console.error('Error loading meeting platforms:', error);
+    }
+  };
+
   const filterAndSort = () => {
     let filtered = [...appointments];
 
@@ -150,9 +186,7 @@ export default function AppointmentsTablePage() {
     setFilteredAppointments(filtered);
   };
 
-  const formatPhone = (phone: string) => {
-    return `+1 (${phone.slice(0, 3)}) ${phone.slice(4, 7)}-${phone.slice(8, 12)}`;
-  };
+  const formatPhone = (phone: string) => formatPhoneDisplay(phone);
 
   const handleWhatsApp = (phone: string, name: string) => {
     const cleaned = phone.replace(/\D/g, '');
@@ -227,7 +261,7 @@ export default function AppointmentsTablePage() {
 
   const handleDateSelect = async (date: Date | undefined) => {
     if (!date) return;
-    
+
     // Normalizar la fecha para evitar problemas de timezone
     const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     setNewDate(normalizedDate);
@@ -238,7 +272,7 @@ export default function AppointmentsTablePage() {
       const month = String(normalizedDate.getMonth() + 1).padStart(2, '0');
       const day = String(normalizedDate.getDate()).padStart(2, '0');
       const formatted = `${year}-${month}-${day}`;
-      
+
       const res = await api.get(`/appointments/available-hours?date=${formatted}`);
       setAvailableHours(res.data.availableHours || []);
     } catch (error) {
@@ -252,14 +286,14 @@ export default function AppointmentsTablePage() {
       toast.error('Por favor selecciona fecha y hora');
       return;
     }
-    
+
     setLoading(true);
     try {
       const year = newDate.getFullYear();
       const month = String(newDate.getMonth() + 1).padStart(2, '0');
       const day = String(newDate.getDate()).padStart(2, '0');
       const formattedDate = `${year}-${month}-${day}`;
-      
+
       await api.patch(`/admin/appointments/${selectedAppointment.ID}/move`, {
         newDate: formattedDate,
         newHour: newHour,
@@ -280,18 +314,92 @@ export default function AppointmentsTablePage() {
 
   const getStatusBadge = (status: string) => {
     const badges: any = {
-      pending: { text: 'Pendiente', class: 'bg-yellow-500' },
-      approved: { text: 'Aprobada', class: 'bg-green-500' },
-      rejected: { text: 'Rechazada', class: 'bg-red-500' },
-      done: { text: 'Completada', class: 'bg-blue-500' },
+      pending: { text: 'Pendiente', class: 'bg-amber-100 text-amber-800 border border-amber-200' },
+      approved: { text: 'Aprobada', class: 'bg-green-50 text-green-700 border border-green-200' },
+      rejected: { text: 'Rechazada', class: 'bg-red-50 text-red-700 border border-red-200' },
+      done: { text: 'Completada', class: 'bg-blue-50 text-blue-700 border border-blue-200' },
     };
-    const badge = badges[status] || { text: status, class: 'bg-gray-500' };
-    return <span className={`px-2 py-1 rounded text-xs text-white ${badge.class}`}>{badge.text}</span>;
+    const badge = badges[status] || { text: status, class: 'bg-gray-100 text-gray-600' };
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badge.class}`}>{badge.text}</span>;
+  };
+
+  const handleAdminCreate = async () => {
+    if (!createForm.firstName || !createForm.lastName || !createForm.appointmentDate || createForm.appointmentHour < 0 || !createForm.appointmentTypeId || !createForm.meetingPlatformId) {
+      toast.error('Completa los campos requeridos: nombre, apellido, fecha, hora, tipo y plataforma');
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.post('/admin/appointments', {
+        firstName: createForm.firstName,
+        lastName: createForm.lastName,
+        email: createForm.email || undefined,
+        phoneNumber: createForm.phoneNumber || undefined,
+        appointmentDate: createForm.appointmentDate,
+        appointmentHour: createForm.appointmentHour,
+        appointmentTypeId: parseInt(createForm.appointmentTypeId),
+        meetingPlatformId: createForm.meetingPlatformId,
+        meetingLink: createForm.meetingLink || undefined,
+        adminNote: createForm.adminNote || undefined,
+      });
+      setShowAdminCreate(false);
+      setCreateForm({ firstName: '', lastName: '', email: '', phoneNumber: '', appointmentDate: '', appointmentHour: -1, appointmentTypeId: '', meetingLink: '', adminNote: '', meetingPlatformId: '' });
+      setCreateDate(undefined);
+      setCreateAvailableHours([]);
+      loadAppointments();
+      toast.success('Cita creada exitosamente');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Error al crear la cita');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateDateSelect = async (date: Date | undefined) => {
+    if (!date) return;
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    setCreateDate(normalizedDate);
+    setCreateForm(prev => ({
+      ...prev,
+      appointmentDate: `${normalizedDate.getFullYear()}-${String(normalizedDate.getMonth() + 1).padStart(2, '0')}-${String(normalizedDate.getDate()).padStart(2, '0')}`,
+      appointmentHour: -1,
+    }));
+    try {
+      const formatted = `${normalizedDate.getFullYear()}-${String(normalizedDate.getMonth() + 1).padStart(2, '0')}-${String(normalizedDate.getDate()).padStart(2, '0')}`;
+      const res = await api.get(`/appointments/available-hours?date=${formatted}`);
+      setCreateAvailableHours(res.data.availableHours || []);
+    } catch { setCreateAvailableHours([]); }
+  };
+
+  const handleAssignPlatform = async () => {
+    if (!selectedAppointment || !selectedPlatformId) return;
+    setLoading(true);
+    try {
+      await api.patch(`/admin/appointments/${selectedAppointment.ID}/platform`, {
+        meetingPlatformId: selectedPlatformId,
+      });
+      setShowPlatform(false);
+      setSelectedPlatformId('');
+      loadAppointments();
+      toast.success('Plataforma asignada');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Error al asignar plataforma');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-8">Tabla de Citas</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Tabla de Citas</h1>
+          <p className="text-sm text-muted-foreground mt-1">Gestiona todas las reservas</p>
+        </div>
+        <Button onClick={() => setShowAdminCreate(true)}>
+          <Plus className="h-4 w-4 mr-2" />Nueva Cita
+        </Button>
+      </div>
 
       <Card>
         <CardHeader>
@@ -299,7 +407,7 @@ export default function AppointmentsTablePage() {
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-4 gap-4">
-            <div>
+            <div className="space-y-2">
               <Label>Estado</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
@@ -314,7 +422,7 @@ export default function AppointmentsTablePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-2">
               <Label>Buscar</Label>
               <Input
                 placeholder="Nombre, email, código..."
@@ -322,7 +430,7 @@ export default function AppointmentsTablePage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label>Ordenar por</Label>
               <Select value={sortField} onValueChange={setSortField}>
                 <SelectTrigger>
@@ -336,7 +444,7 @@ export default function AppointmentsTablePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-2">
               <Label>Dirección</Label>
               <Select value={sortDir} onValueChange={setSortDir}>
                 <SelectTrigger>
@@ -398,7 +506,7 @@ export default function AppointmentsTablePage() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleWhatsApp(apt.PhoneNumber, apt.FirstName)}>
                           <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
                           </svg>
                           WhatsApp
                         </DropdownMenuItem>
@@ -447,6 +555,20 @@ export default function AppointmentsTablePage() {
                             Mover fecha
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => {
+                          setSelectedAppointment(apt);
+                          setSelectedPlatformId(apt.MeetingPlatformID || '');
+                          setShowPlatform(true);
+                        }}>
+                          Asignar plataforma
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          setSelectedAppointment(apt);
+                          setShowDetails(true);
+                        }}>
+                          Ver detalles
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -477,7 +599,7 @@ export default function AppointmentsTablePage() {
                   </div>
                 </div>
               </SheetHeader>
-              
+
               <div className="mt-6 space-y-6">
                 {/* Información de la reserva */}
                 <Card>
@@ -529,7 +651,7 @@ export default function AppointmentsTablePage() {
                             </Button>
                           </div>
                         ) : (
-                          <img 
+                          <img
                             src={receiptUrl}
                             alt="Comprobante de pago"
                             className="w-full h-auto rounded-md shadow-sm"
@@ -551,8 +673,8 @@ export default function AppointmentsTablePage() {
               </div>
 
               <SheetFooter className="mt-6 pt-6 border-t">
-                <Button 
-                  onClick={() => setShowReceipt(false)} 
+                <Button
+                  onClick={() => setShowReceipt(false)}
                   className="w-full"
                   size="lg"
                 >
@@ -566,45 +688,93 @@ export default function AppointmentsTablePage() {
 
       {/* Modal detalles */}
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Detalles de la Cita</DialogTitle>
+            <DialogDescription>Información completa de la reserva</DialogDescription>
           </DialogHeader>
           {selectedAppointment && (
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm text-muted-foreground">Código</p>
-                <p className="font-mono">{selectedAppointment.ShortID}</p>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Código</p>
+                  <p className="font-mono font-medium">{selectedAppointment.ShortID}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Estado</p>
+                  <div>{getStatusBadge(selectedAppointment.Status)}</div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Cliente</p>
+                  <p className="font-medium">{selectedAppointment.FirstName} {selectedAppointment.LastName}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Tipo</p>
+                  <p className="font-medium">{selectedAppointment.AppointmentType?.Name}</p>
+                </div>
+                {selectedAppointment.Email && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Email</p>
+                    <p className="text-sm">{selectedAppointment.Email}</p>
+                  </div>
+                )}
+                {selectedAppointment.PhoneNumber && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Teléfono</p>
+                    <p className="text-sm">{formatPhone(selectedAppointment.PhoneNumber)}</p>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Banco</p>
+                  <p className="text-sm capitalize">{getBankName(selectedAppointment)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Fecha y Hora</p>
+                  <p className="text-sm capitalize">
+                    {format(new Date(selectedAppointment.AppointmentDate + 'T12:00:00'), "dd MMM yyyy", { locale: es })} - {formatHour12(selectedAppointment.AppointmentHour)}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Cliente</p>
-                <p>
-                  {selectedAppointment.FirstName} {selectedAppointment.LastName}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Email</p>
-                <p>{selectedAppointment.Email}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Teléfono</p>
-                <p>{formatPhone(selectedAppointment.PhoneNumber)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Banco</p>
-                <p className="capitalize">{getBankName(selectedAppointment)}</p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  window.open(
-                    `${process.env.NEXT_PUBLIC_API_URL}/appointments/receipt/${selectedAppointment.ShortID}`,
-                    '_blank'
-                  )
-                }
-              >
-                Ver Comprobante
-              </Button>
+
+              {/* Plataforma */}
+              {selectedAppointment.MeetingPlatform && (
+                <div className="rounded-lg border p-3 bg-muted/30">
+                  <p className="text-sm text-muted-foreground mb-1">Plataforma</p>
+                  <p className="font-medium">{selectedAppointment.MeetingPlatform.Name}</p>
+                </div>
+              )}
+
+              {/* Meeting Link */}
+              {selectedAppointment.MeetingLink && (
+                <div className="rounded-lg border p-3 bg-blue-50">
+                  <p className="text-sm text-muted-foreground mb-1">Enlace de Reunión</p>
+                  <a
+                    href={selectedAppointment.MeetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+                  >
+                    {selectedAppointment.MeetingLink}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
+
+              {/* Admin Note */}
+              {selectedAppointment.AdminNote && (
+                <div className="rounded-lg border p-3 bg-muted/30">
+                  <p className="text-sm text-muted-foreground mb-1">Nota del Admin</p>
+                  <p className="text-sm">{selectedAppointment.AdminNote}</p>
+                </div>
+              )}
+
+              {/* Rejection Reason */}
+              {selectedAppointment.RejectionReason && (
+                <div className="rounded-lg border p-3 bg-red-50">
+                  <p className="text-sm text-muted-foreground mb-1">Razón de Rechazo</p>
+                  <p className="text-sm">{selectedAppointment.RejectionReason}</p>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
@@ -772,15 +942,15 @@ export default function AppointmentsTablePage() {
 
             {/* Botones */}
             <div className="flex gap-2">
-              <Button 
-                onClick={handleMove} 
+              <Button
+                onClick={handleMove}
                 disabled={!newDate || newHour === undefined || loading}
                 className="flex-1"
               >
                 {loading ? 'Moviendo...' : 'Mover Cita'}
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setShowMove(false)}
                 disabled={loading}
               >
@@ -814,6 +984,222 @@ export default function AppointmentsTablePage() {
             <Button variant="outline" onClick={() => setShowDone(false)} disabled={loading}>
               Cancelar
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Modal Admin Create Appointment */}
+      <Dialog open={showAdminCreate} onOpenChange={(open) => {
+        setShowAdminCreate(open);
+        if (!open) {
+          setCreateForm({ firstName: '', lastName: '', email: '', phoneNumber: '', appointmentDate: '', appointmentHour: -1, appointmentTypeId: '', meetingLink: '', adminNote: '', meetingPlatformId: '' });
+          setCreateDate(undefined);
+          setCreateAvailableHours([]);
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nueva Cita (Admin)</DialogTitle>
+            <DialogDescription>
+              Crea una cita directamente. Se creará con estado aprobado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nombre *</Label>
+                <Input
+                  value={createForm.firstName}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, firstName: e.target.value }))}
+                  placeholder="Nombre"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Apellido *</Label>
+                <Input
+                  value={createForm.lastName}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, lastName: e.target.value }))}
+                  placeholder="Apellido"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Email <span className="text-muted-foreground">(opcional)</span></Label>
+                <Input
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="correo@ejemplo.com"
+                  type="email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Teléfono <span className="text-muted-foreground">(opcional)</span></Label>
+                <Input
+                  value={createForm.phoneNumber}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    let formatted = digits;
+                    if (digits.length > 3 && digits.length <= 6) formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+                    else if (digits.length > 6) formatted = `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+                    setCreateForm(prev => ({ ...prev, phoneNumber: formatted }));
+                  }}
+                  placeholder="809-555-1234"
+                  maxLength={12}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de Cita *</Label>
+              <Select
+                value={createForm.appointmentTypeId}
+                onValueChange={(val) => setCreateForm(prev => ({ ...prev, appointmentTypeId: val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {appointmentTypes.filter((t: any) => t.Visible).map((type: any) => (
+                    <SelectItem key={type.ID} value={String(type.ID)}>
+                      {type.Name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Calendar */}
+            <div className="space-y-2">
+              <Label>Fecha *</Label>
+              <div className="flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={createDate}
+                  onSelect={handleCreateDateSelect}
+                  disabled={(date) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return date < today;
+                  }}
+                  locale={es}
+                  className="rounded-md border"
+                />
+              </div>
+            </div>
+
+            {createDate && (
+              <div className="text-center p-2 bg-blue-50 rounded-lg">
+                <p className="font-medium text-blue-900 text-sm">
+                  {format(createDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: es })}
+                </p>
+              </div>
+            )}
+
+            {createDate && (
+              <div className="space-y-2">
+                <Label>Hora *</Label>
+                {createAvailableHours.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No hay horas disponibles</p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2">
+                    {createAvailableHours.map((hour) => (
+                      <Button
+                        key={hour}
+                        variant={createForm.appointmentHour === hour ? 'default' : 'outline'}
+                        onClick={() => setCreateForm(prev => ({ ...prev, appointmentHour: hour }))}
+                        size="sm"
+                      >
+                        {formatHour12(hour)}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Plataforma *</Label>
+              <Select
+                value={createForm.meetingPlatformId}
+                onValueChange={(val) => setCreateForm(prev => ({ ...prev, meetingPlatformId: val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona una plataforma" />
+                </SelectTrigger>
+                <SelectContent>
+                  {meetingPlatforms.map((platform: any) => (
+                    <SelectItem key={platform.ID} value={platform.ID}>
+                      {platform.Name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Enlace de Reunión <span className="text-muted-foreground">(opcional)</span></Label>
+              <Input
+                value={createForm.meetingLink}
+                onChange={(e) => setCreateForm(prev => ({ ...prev, meetingLink: e.target.value }))}
+                placeholder="https://zoom.us/j/..."
+                type="url"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Nota <span className="text-muted-foreground">(opcional)</span></Label>
+              <Textarea
+                value={createForm.adminNote}
+                onChange={(e) => setCreateForm(prev => ({ ...prev, adminNote: e.target.value }))}
+                placeholder="Notas adicionales..."
+                rows={2}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={handleAdminCreate} disabled={loading} className="flex-1">
+                {loading ? 'Creando...' : 'Crear Cita'}
+              </Button>
+              <Button variant="outline" onClick={() => setShowAdminCreate(false)} disabled={loading}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Asignar Plataforma */}
+      <Dialog open={showPlatform} onOpenChange={setShowPlatform}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Asignar Plataforma</DialogTitle>
+            <DialogDescription>
+              Selecciona la plataforma donde se realizará la reunión
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Plataforma</Label>
+              <Select value={selectedPlatformId} onValueChange={setSelectedPlatformId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona una plataforma" />
+                </SelectTrigger>
+                <SelectContent>
+                  {meetingPlatforms.map((platform: any) => (
+                    <SelectItem key={platform.ID} value={platform.ID}>
+                      {platform.Name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleAssignPlatform} disabled={!selectedPlatformId || loading} className="flex-1">
+                {loading ? 'Asignando...' : 'Asignar'}
+              </Button>
+              <Button variant="outline" onClick={() => setShowPlatform(false)}>
+                Cancelar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

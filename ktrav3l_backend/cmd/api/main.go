@@ -99,7 +99,11 @@ func main() {
 		admin.POST("/appointments/:id/reject", controllers.RejectAppointment)
 		admin.POST("/appointments/:id/done", controllers.MarkAppointmentDone)
 		admin.PATCH("/appointments/:id/move", controllers.MoveAppointment)
+		admin.PATCH("/appointments/:id/platform", controllers.UpdateAppointmentPlatform)
+		admin.PATCH("/appointments/:id/details", controllers.UpdateAppointmentDetails)
+		admin.POST("/appointments", controllers.AdminCreateAppointment)
 		admin.GET("/calendar", controllers.GetCalendarData)
+		admin.GET("/dashboard-stats", controllers.GetDashboardStats)
 
 		// Appointment types management
 		admin.GET("/appointment-types", controllers.GetAllAppointmentTypes)
@@ -120,6 +124,12 @@ func main() {
 		admin.POST("/bank-accounts", controllers.CreateBankAccount)
 		admin.PATCH("/bank-accounts/:id", controllers.UpdateBankAccount)
 		admin.DELETE("/bank-accounts/:id", controllers.DeleteBankAccount)
+
+		// Meeting platforms management
+		admin.GET("/meeting-platforms", controllers.GetMeetingPlatforms)
+		admin.POST("/meeting-platforms", controllers.CreateMeetingPlatform)
+		admin.PATCH("/meeting-platforms/:id", controllers.UpdateMeetingPlatform)
+		admin.DELETE("/meeting-platforms/:id", controllers.DeleteMeetingPlatform)
 	}
 
 	r.Run()

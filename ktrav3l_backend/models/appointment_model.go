@@ -47,6 +47,9 @@ type Appointment struct {
 	RejectionReason   string            // Razón de rechazo (opcional)
 	MeetingLink       string            // Enlace de la reunión (Zoom/Google Meet)
 	AdminNote         string            // Nota del admin para el cliente
+	MeetingPlatformID *uuid.UUID        // ID de la plataforma de reunión
+	MeetingPlatform   *MeetingPlatform  `gorm:"foreignKey:MeetingPlatformID"`
+	CreatedByAdmin    bool              `gorm:"default:false"`
 }
 
 // BeforeCreate hook para generar el ShortID

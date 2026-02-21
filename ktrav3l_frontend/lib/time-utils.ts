@@ -10,10 +10,10 @@ export function formatHour12(hour: number): string {
 export function parseHour24(hourStr: string): number {
   const match = hourStr.match(/(\d+):00 (AM|PM)/);
   if (!match) return 0;
-  
+
   let hour = parseInt(match[1]);
   const period = match[2];
-  
+
   if (period === 'AM') {
     if (hour === 12) return 0;
     return hour;
@@ -33,4 +33,14 @@ export function generateAll24Hours(): { hour: number; label: string }[] {
     });
   }
   return hours;
+}
+
+// Formatea un número de teléfono (10 dígitos puros) como +1(###) ###-####
+export function formatPhoneDisplay(phone: string | undefined | null): string {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `+1(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  }
+  return phone; // fallback: devolver tal cual
 }

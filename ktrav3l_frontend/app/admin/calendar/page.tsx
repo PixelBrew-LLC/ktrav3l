@@ -9,12 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import api from '@/lib/api';
 import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DayButton } from 'react-day-picker';
 import { cn } from '@/lib/utils';
-import { formatHour12 } from '@/lib/time-utils';
+import { formatHour12, formatPhoneDisplay } from '@/lib/time-utils';
 import { toast } from 'sonner';
 
 export default function CalendarAdminPage() {
@@ -23,6 +24,7 @@ export default function CalendarAdminPage() {
   const [calendarData, setCalendarData] = useState<any>({});
   const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [meetingPlatforms, setMeetingPlatforms] = useState<any[]>([]);
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState<string>('');
   const [showDetails, setShowDetails] = useState(false);
@@ -39,8 +41,16 @@ export default function CalendarAdminPage() {
   const [moveNote, setMoveNote] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    firstName: '', lastName: '', email: '', phoneNumber: '',
+    meetingLink: '', adminNote: '', meetingPlatformId: '',
+  });
+
   useEffect(() => {
     loadBankAccounts();
+    loadMeetingPlatforms();
   }, []);
 
   useEffect(() => {
@@ -61,7 +71,7 @@ export default function CalendarAdminPage() {
       });
       const contentType = response.headers['content-type'];
       const url = URL.createObjectURL(response.data);
-      
+
       // Si es PDF, agregar .pdf al final para que la lógica de detección funcione
       if (contentType === 'application/pdf') {
         setReceiptUrl(url + '#.pdf');
@@ -79,6 +89,15 @@ export default function CalendarAdminPage() {
       setBankAccounts(res.data.bankAccounts || []);
     } catch (error) {
       console.error('Error loading bank accounts:', error);
+    }
+  };
+
+  const loadMeetingPlatforms = async () => {
+    try {
+      const res = await api.get('/admin/meeting-platforms');
+      setMeetingPlatforms(res.data.meetingPlatforms || []);
+    } catch (error) {
+      console.error('Error loading meeting platforms:', error);
     }
   };
 
@@ -196,7 +215,7 @@ export default function CalendarAdminPage() {
 
   const handleDateSelect = async (date: Date | undefined) => {
     if (!date) return;
-    
+
     // Normalizar la fecha para evitar problemas de timezone
     const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     setNewDate(normalizedDate);
@@ -207,7 +226,7 @@ export default function CalendarAdminPage() {
       const month = String(normalizedDate.getMonth() + 1).padStart(2, '0');
       const day = String(normalizedDate.getDate()).padStart(2, '0');
       const formatted = `${year}-${month}-${day}`;
-      
+
       const res = await api.get(`/appointments/available-hours?date=${formatted}`);
       setAvailableHours(res.data.availableHours || []);
     } catch (error) {
@@ -221,14 +240,14 @@ export default function CalendarAdminPage() {
       toast.error('Por favor selecciona fecha y hora');
       return;
     }
-    
+
     setLoading(true);
     try {
       const year = newDate.getFullYear();
       const month = String(newDate.getMonth() + 1).padStart(2, '0');
       const day = String(newDate.getDate()).padStart(2, '0');
       const formattedDate = `${year}-${month}-${day}`;
-      
+
       await api.patch(`/admin/appointments/${selectedAppointment.id}/move`, {
         newDate: formattedDate,
         newHour: newHour,
@@ -243,6 +262,44 @@ export default function CalendarAdminPage() {
       toast.success('Cita movida exitosamente');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Error al mover la cita');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEditing = () => {
+    if (!selectedAppointment) return;
+    setEditForm({
+      firstName: selectedAppointment.firstName || '',
+      lastName: selectedAppointment.lastName || '',
+      email: selectedAppointment.email || '',
+      phoneNumber: selectedAppointment.phoneNumber || '',
+      meetingLink: selectedAppointment.meetingLink || '',
+      adminNote: selectedAppointment.adminNote || '',
+      meetingPlatformId: selectedAppointment.meetingPlatformId || '',
+    });
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedAppointment) return;
+    setLoading(true);
+    try {
+      await api.patch(`/admin/appointments/${selectedAppointment.id}/details`, editForm);
+      setIsEditing(false);
+      loadCalendarData();
+      // Actualizar el appointment seleccionado con los nuevos datos
+      setSelectedAppointment((prev: any) => {
+        const platform = meetingPlatforms.find((p: any) => p.ID === editForm.meetingPlatformId);
+        return {
+          ...prev,
+          ...editForm,
+          meetingPlatform: platform?.Name || prev.meetingPlatform,
+        };
+      });
+      toast.success('Cita actualizada exitosamente');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Error al actualizar la cita');
     } finally {
       setLoading(false);
     }
@@ -293,7 +350,7 @@ export default function CalendarAdminPage() {
                 components={{
                   DayButton: ({ day, ...buttonProps }: React.ComponentProps<typeof DayButton>) => {
                     const dayAppointments = calendarData[format(day.date, 'yyyy-MM-dd')] || [];
-                    
+
                     return (
                       <CalendarDayButton
                         day={day}
@@ -351,7 +408,9 @@ export default function CalendarAdminPage() {
                         <div className={`w-2 h-2 rounded-full ${getStatusColor(apt.status)}`}></div>
                         <div>
                           <p className="font-medium text-sm">{apt.firstName} {apt.lastName}</p>
-                          <p className="text-xs text-muted-foreground">{apt.type} • {apt.hour}:00</p>
+                          <p className="text-xs text-muted-foreground">
+                            {apt.type} • {apt.hour}:00{apt.meetingPlatform ? ` • ${apt.meetingPlatform}` : ''}
+                          </p>
                         </div>
                       </div>
                       <span className={`px-2 py-1 rounded text-xs ${getStatusColor(apt.status)} text-white`}>
@@ -377,47 +436,114 @@ export default function CalendarAdminPage() {
                   Código: {selectedAppointment.shortID}
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSelectedAppointment(null)}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </Button>
+              <div className="flex items-center gap-2">
+                {selectedAppointment.status !== 'done' && (
+                  <Button
+                    variant={isEditing ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => isEditing ? handleSaveEdit() : startEditing()}
+                    disabled={loading}
+                  >
+                    {isEditing ? (loading ? 'Guardando...' : 'Guardar') : 'Editar'}
+                  </Button>
+                )}
+                {isEditing && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditing(false)}
+                    disabled={loading}
+                  >
+                    Cancelar
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => { setSelectedAppointment(null); setIsEditing(false); }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
             {/* Información del cliente */}
             <div className="border-b pb-4">
               <h3 className="font-semibold mb-4">Información del Cliente</h3>
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-muted-foreground mb-1">Nombre</p>
-                    <p className="font-medium">{selectedAppointment.firstName}</p>
+              {isEditing ? (
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-muted-foreground">Nombre</Label>
+                      <Input
+                        value={editForm.firstName}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, firstName: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-muted-foreground">Apellido</Label>
+                      <Input
+                        value={editForm.lastName}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, lastName: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground">Email</Label>
+                    <Input
+                      value={editForm.email}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                      type="email"
+                      placeholder="correo@ejemplo.com"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground">Teléfono</Label>
+                    <Input
+                      value={editForm.phoneNumber}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        let formatted = digits;
+                        if (digits.length > 3 && digits.length <= 6) formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+                        else if (digits.length > 6) formatted = `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+                        setEditForm(prev => ({ ...prev, phoneNumber: formatted }));
+                      }}
+                      placeholder="809-555-1234"
+                      maxLength={12}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-muted-foreground mb-1">Nombre</p>
+                      <p className="font-medium">{selectedAppointment.firstName}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-1">Apellido</p>
+                      <p className="font-medium">{selectedAppointment.lastName}</p>
+                    </div>
                   </div>
                   <div>
-                    <p className="text-muted-foreground mb-1">Apellido</p>
-                    <p className="font-medium">{selectedAppointment.lastName}</p>
+                    <p className="text-muted-foreground mb-1">Email</p>
+                    <p className="font-medium break-all">{selectedAppointment.email || <span className="text-muted-foreground italic">No proporcionado</span>}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground mb-1">Teléfono</p>
+                    <p className="font-medium">{formatPhoneDisplay(selectedAppointment.phoneNumber) || <span className="text-muted-foreground italic">No proporcionado</span>}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground mb-1">Estado</p>
+                    <span className={`inline-block px-2 py-1 rounded text-xs ${getStatusColor(selectedAppointment.status)} text-white`}>
+                      {getStatusLabel(selectedAppointment.status)}
+                    </span>
                   </div>
                 </div>
-                <div>
-                  <p className="text-muted-foreground mb-1">Email</p>
-                  <p className="font-medium break-all">{selectedAppointment.email}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground mb-1">Teléfono</p>
-                  <p className="font-medium">{selectedAppointment.phoneNumber}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground mb-1">Estado</p>
-                  <span className={`inline-block px-2 py-1 rounded text-xs ${getStatusColor(selectedAppointment.status)} text-white`}>
-                    {getStatusLabel(selectedAppointment.status)}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Acciones de contacto */}
@@ -427,16 +553,18 @@ export default function CalendarAdminPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open(`https://wa.me/${selectedAppointment.phoneNumber.replace(/\D/g, '')}`, '_blank')}
+                  disabled={!selectedAppointment.phoneNumber}
+                  onClick={() => window.open(`https://wa.me/${selectedAppointment.phoneNumber?.replace(/\D/g, '')}`, '_blank')}
                 >
                   <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
                   </svg>
                   WhatsApp
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={!selectedAppointment.phoneNumber}
                   onClick={() => window.open(`tel:${selectedAppointment.phoneNumber}`, '_self')}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -447,6 +575,7 @@ export default function CalendarAdminPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={!selectedAppointment.email}
                   onClick={() => window.open(`mailto:${selectedAppointment.email}`, '_self')}
                 >
                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -475,6 +604,110 @@ export default function CalendarAdminPage() {
                   <p className="text-muted-foreground mb-1">Banco de transferencia</p>
                   <p className="font-medium capitalize">{getBankName(selectedAppointment)}</p>
                 </div>
+
+                {isEditing ? (
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground">Plataforma</Label>
+                    <Select
+                      value={editForm.meetingPlatformId}
+                      onValueChange={(val) => setEditForm(prev => ({ ...prev, meetingPlatformId: val }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona una plataforma" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {meetingPlatforms.map((platform: any) => (
+                          <SelectItem key={platform.ID} value={platform.ID}>
+                            {platform.Name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-muted-foreground mb-1">Plataforma</p>
+                    <p className="font-medium">{selectedAppointment.meetingPlatform || <span className="text-muted-foreground italic">No especificado</span>}</p>
+                  </div>
+                )}
+
+                {/* Enlace de reunión */}
+                {isEditing ? (
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground">Enlace de Reunión</Label>
+                    <Input
+                      value={editForm.meetingLink}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, meetingLink: e.target.value }))}
+                      placeholder="https://zoom.us/j/..."
+                      type="url"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-muted-foreground mb-1">Enlace de Reunión</p>
+                    {selectedAppointment.meetingLink ? (
+                      <a
+                        href={selectedAppointment.meetingLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-blue-600 hover:underline break-all inline-flex items-center gap-1"
+                      >
+                        {selectedAppointment.meetingLink}
+                        <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    ) : (
+                      <p className="font-medium"><span className="text-muted-foreground italic">No especificado</span></p>
+                    )}
+                  </div>
+                )}
+
+                {/* Nota del admin */}
+                {isEditing ? (
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground">Nota del Admin</Label>
+                    <Textarea
+                      value={editForm.adminNote}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, adminNote: e.target.value }))}
+                      placeholder="Notas adicionales..."
+                      rows={2}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-muted-foreground mb-1">Nota del Admin</p>
+                    {selectedAppointment.adminNote ? (
+                      <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
+                        <p className="font-medium text-sm">{selectedAppointment.adminNote}</p>
+                      </div>
+                    ) : (
+                      <p className="font-medium"><span className="text-muted-foreground italic">No especificado</span></p>
+                    )}
+                  </div>
+                )}
+
+                {/* Razón de rechazo */}
+                <div>
+                  <p className="text-muted-foreground mb-1">Razón de Rechazo</p>
+                  {selectedAppointment.rejectionReason ? (
+                    <div className="rounded-lg bg-red-50 border border-red-100 p-3">
+                      <p className="font-medium text-sm">{selectedAppointment.rejectionReason}</p>
+                    </div>
+                  ) : (
+                    <p className="font-medium"><span className="text-muted-foreground italic">No especificado</span></p>
+                  )}
+                </div>
+
+                {/* Creada por admin */}
+                {selectedAppointment.createdByAdmin && (
+                  <div>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                      Creada por Admin
+                    </span>
+                  </div>
+                )}
+
                 <div>
                   <p className="text-muted-foreground mb-1">Comprobante de pago</p>
                   <Button
@@ -490,12 +723,6 @@ export default function CalendarAdminPage() {
                     Ver comprobante
                   </Button>
                 </div>
-                {selectedAppointment.notes && (
-                  <div>
-                    <p className="text-muted-foreground mb-1">Notas adicionales</p>
-                    <p className="font-medium">{selectedAppointment.notes}</p>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -575,7 +802,7 @@ export default function CalendarAdminPage() {
                   </div>
                 </div>
               </SheetHeader>
-              
+
               <div className="mt-6 space-y-6">
                 {/* Información de la reserva */}
                 <Card>
@@ -625,7 +852,7 @@ export default function CalendarAdminPage() {
                             </Button>
                           </div>
                         ) : (
-                          <img 
+                          <img
                             src={receiptUrl}
                             alt="Comprobante de pago"
                             className="w-full h-auto rounded-md shadow-sm"
@@ -647,8 +874,8 @@ export default function CalendarAdminPage() {
               </div>
 
               <SheetFooter className="mt-6 pt-6 border-t">
-                <Button 
-                  onClick={() => setShowReceipt(false)} 
+                <Button
+                  onClick={() => setShowReceipt(false)}
                   className="w-full"
                   size="lg"
                 >
@@ -819,14 +1046,14 @@ export default function CalendarAdminPage() {
 
             {/* Botones */}
             <div className="flex gap-2">
-              <Button 
-                onClick={handleMove} 
+              <Button
+                onClick={handleMove}
                 disabled={!newDate || newHour === undefined || loading}
               >
                 {loading ? 'Moviendo...' : 'Mover Cita'}
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setShowMove(false)}
                 disabled={loading}
               >

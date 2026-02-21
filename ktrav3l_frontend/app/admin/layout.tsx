@@ -26,15 +26,31 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Calendar, Table2, Settings, LogOut, FileType, Landmark, Home } from 'lucide-react';
+import { Calendar, Table2, Settings, LogOut, FileType, Landmark, Home, Monitor, ClipboardList, Wrench } from 'lucide-react';
 
-const menuItems = [
-  { title: 'Dashboard', icon: Home, url: '/admin/dashboard' },
-  { title: 'Calendario', icon: Calendar, url: '/admin/calendar' },
-  { title: 'Tabla de Citas', icon: Table2, url: '/admin/appointments' },
-  { title: 'Tipos de Cita', icon: FileType, url: '/admin/appointment-types' },
-  { title: 'Cuentas Bancarias', icon: Landmark, url: '/admin/bank-accounts' },
-  { title: 'Disponibilidad', icon: Settings, url: '/admin/availability' },
+const menuGroups = [
+  {
+    label: 'General',
+    items: [
+      { title: 'Dashboard', icon: Home, url: '/admin/dashboard' },
+      { title: 'Calendario', icon: Calendar, url: '/admin/calendar' },
+    ],
+  },
+  {
+    label: 'Citas',
+    items: [
+      { title: 'Tabla de Citas', icon: Table2, url: '/admin/appointments' },
+      { title: 'Tipos de Cita', icon: FileType, url: '/admin/appointment-types' },
+    ],
+  },
+  {
+    label: 'Configuración',
+    items: [
+      { title: 'Cuentas Bancarias', icon: Landmark, url: '/admin/bank-accounts' },
+      { title: 'Plataformas', icon: Monitor, url: '/admin/meeting-platforms' },
+      { title: 'Disponibilidad', icon: Settings, url: '/admin/availability' },
+    ],
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -70,23 +86,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           </SidebarHeader>
           <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>Gestión</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {menuItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={pathname === item.url}>
-                        <a href={item.url}>
-                          <item.icon />
-                          <span>{item.title}</span>
-                        </a>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+            {menuGroups.map((group) => (
+              <SidebarGroup key={group.label}>
+                <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {group.items.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild isActive={pathname === item.url}>
+                          <a href={item.url}>
+                            <item.icon />
+                            <span>{item.title}</span>
+                          </a>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))}
           </SidebarContent>
           <SidebarFooter className="pb-6">
             <SidebarMenu>

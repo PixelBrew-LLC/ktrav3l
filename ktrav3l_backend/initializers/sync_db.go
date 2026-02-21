@@ -8,6 +8,7 @@ func SyncDB() {
 		&models.AppointmentType{},
 		&models.AvailabilityRule{},
 		&models.BankAccount{},
+		&models.MeetingPlatform{},
 		&models.Appointment{},
 	)
 }

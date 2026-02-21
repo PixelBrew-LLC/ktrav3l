@@ -15,19 +15,21 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Info } from 'lucide-react';
-import { formatHour12 } from '@/lib/time-utils';
+import { formatHour12, formatPhoneDisplay } from '@/lib/time-utils';
 
 const formSchema = z.object({
   firstName: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
   lastName: z.string().min(2, 'El apellido debe tener al menos 2 caracteres'),
   email: z.string().email('Email inválido'),
-  phoneNumber: z.string().regex(/^\d{3}-\d{3}-\d{4}$/, 'Formato: ###-###-####'),
+  phoneNumber: z.string()
+    .transform(val => val.replace(/\D/g, ''))
+    .pipe(z.string().length(10, 'El teléfono debe tener 10 dígitos')),
   appointmentTypeID: z.string().min(1, 'Selecciona un tipo de cita'),
   bankTransfer: z.string().min(1, 'Selecciona un banco'),
-  receipt: typeof window !== 'undefined' 
+  receipt: typeof window !== 'undefined'
     ? z.instanceof(FileList)
-        .refine((files) => files.length > 0, 'Debes subir el comprobante')
-        .refine((files) => files[0]?.size <= 5 * 1024 * 1024, 'El archivo debe ser menor a 5 MB')
+      .refine((files) => files.length > 0, 'Debes subir el comprobante')
+      .refine((files) => files[0]?.size <= 5 * 1024 * 1024, 'El archivo debe ser menor a 5 MB')
     : z.any(),
 });
 
@@ -139,15 +141,15 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-4 md:py-8 px-4">
+    <div className="min-h-screen bg-gray-50 py-6 md:py-12 px-4 md:px-6">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col md:flex-row items-center md:items-end justify-between gap-4 mb-6 md:mb-8">
-          <div className="flex flex-col md:flex-row items-center md:items-end gap-3 md:gap-6 w-full md:w-auto">
+        <div className="flex flex-col md:flex-row items-center md:items-end justify-between gap-4 mb-8 md:mb-10">
+          <div className="flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-6 w-full md:w-auto">
             <img src="/logo.png" alt="KTravel" className="h-16 md:h-20 w-auto" />
             <div className="text-center md:text-left">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Crear Reserva</h1>
-              <p className="text-sm md:text-base text-gray-600">Agenda tu cita en pocos pasos</p>
+              <p className="text-sm md:text-base text-gray-600 mt-1">Agenda tu cita en pocos pasos</p>
             </div>
           </div>
           <Button variant="outline" asChild className="w-full md:w-auto">
@@ -155,30 +157,48 @@ export default function Home() {
           </Button>
         </div>
 
-        <div className="grid md:grid-cols-[320px_1fr] gap-6">
+        <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-3 mb-8 flex items-center gap-3">
+          <svg className="w-5 h-5 text-purple-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <p className="text-sm text-purple-800">
+            <span className="font-semibold">Nota:</span> Por el momento, todas las citas son de forma virtual.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-[340px_1fr] gap-8">
           {/* Calendario - orden 2 en mobile, 1 en desktop */}
           <Card className="order-2 md:order-1">
             <CardHeader>
               <CardTitle>Selecciona Fecha y Hora</CardTitle>
               <CardDescription>Elige una fecha disponible</CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col items-center">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={handleDateSelect}
-                disabled={(date) => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const checkDate = new Date(date);
-                  checkDate.setHours(0, 0, 0, 0);
-                  return checkDate < today;
-                }}
-                className="rounded-md border"
-              />
+            <CardContent className="flex flex-col">
+              <div className="flex justify-center overflow-hidden">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleDateSelect}
+                  disabled={(date) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const checkDate = new Date(date);
+                    checkDate.setHours(0, 0, 0, 0);
+                    return checkDate < today;
+                  }}
+                  className="rounded-md border pb-4"
+                />
+              </div>
+
+              {!selectedDate && (
+                <div className="mt-6 w-full flex items-center gap-2 text-muted-foreground bg-gray-100 rounded-lg px-3 py-3">
+                  <Info className="h-4 w-4 shrink-0" />
+                  <p className="text-sm">Selecciona una fecha para ver los horarios disponibles</p>
+                </div>
+              )}
 
               {selectedDate && availableHours.length > 0 && (
-                <div className="mt-4 w-full">
+                <div className="mt-6 w-full">
                   <Label>Horas Disponibles</Label>
                   <div className="grid grid-cols-3 gap-2 mt-2">
                     {availableHours.map((hour) => (
@@ -196,19 +216,19 @@ export default function Home() {
               )}
 
               {selectedDate && availableHours.length === 0 && (
-                <p className="text-sm text-muted-foreground mt-4">No hay horas disponibles para esta fecha</p>
+                <p className="text-sm text-muted-foreground mt-6">No hay horas disponibles para esta fecha</p>
               )}
 
               {/* Botón solo visible en mobile, dentro del contenedor del calendario */}
               <div className="md:hidden mt-6 w-full">
-                <Button 
+                <Button
                   onClick={() => {
                     const form = document.querySelector('form') as HTMLFormElement;
                     if (form) {
                       form.requestSubmit();
                     }
                   }}
-                  className="w-full" 
+                  className="w-full"
                   disabled={loading || !selectedDate || selectedHour === undefined}
                 >
                   {loading ? 'Creando...' : 'Crear Reserva'}
@@ -224,40 +244,40 @@ export default function Home() {
               <CardDescription>Completa tus datos para reservar</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                 <div className="grid md:grid-cols-2 gap-4">
-                  <div>
+                  <div className="space-y-1.5">
                     <Label htmlFor="firstName">Nombre</Label>
                     <Input id="firstName" {...register('firstName')} placeholder="Ej: Juan" />
                     {errors.firstName && <p className="text-xs text-red-500 mt-1">{errors.firstName.message}</p>}
                   </div>
 
-                  <div>
+                  <div className="space-y-1.5">
                     <Label htmlFor="lastName">Apellido</Label>
                     <Input id="lastName" {...register('lastName')} placeholder="Ej: Pérez" />
                     {errors.lastName && <p className="text-xs text-red-500 mt-1">{errors.lastName.message}</p>}
                   </div>
                 </div>
 
-                <div>
+                <div className="space-y-1.5">
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" type="email" {...register('email')} placeholder="Ej: juan.perez@email.com" />
                   {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>}
                 </div>
 
-                <div>
+                <div className="space-y-1.5">
                   <Label htmlFor="phoneNumber">Teléfono</Label>
                   <Input
                     id="phoneNumber"
                     {...register('phoneNumber')}
                     onChange={handlePhoneChange}
-                    placeholder="Ej: 809-555-1234"
+                    placeholder="Ej: 809 555 1234"
                     maxLength={12}
                   />
                   {errors.phoneNumber && <p className="text-xs text-red-500 mt-1">{errors.phoneNumber.message}</p>}
                 </div>
 
-                <div>
+                <div className="space-y-1.5">
                   <Label htmlFor="appointmentTypeID">Tipo de Cita</Label>
                   <Select onValueChange={(value) => setValue('appointmentTypeID', value)}>
                     <SelectTrigger className="w-full">
@@ -290,7 +310,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div>
+                <div className="space-y-1.5">
                   <Label htmlFor="bankTransfer">Banco para Transferencia</Label>
                   <Select
                     onValueChange={(value) => {
@@ -311,7 +331,7 @@ export default function Home() {
                     </SelectContent>
                   </Select>
                   {errors.bankTransfer && <p className="text-xs text-red-500 mt-1">{errors.bankTransfer.message}</p>}
-                  
+
                   {selectedBankAccount ? (
                     <div className="mt-2 p-3 bg-gray-50 rounded-md border">
                       <p className="text-sm font-medium text-gray-700">Número de Cuenta</p>
@@ -322,7 +342,7 @@ export default function Home() {
                   )}
                 </div>
 
-                <div>
+                <div className="space-y-1.5">
                   <Label htmlFor="receipt">Comprobante de Pago (JPG, PNG, PDF)</Label>
                   <Input id="receipt" type="file" accept=".jpg,.jpeg,.png,.pdf" {...register('receipt')} />
                   {errors.receipt && <p className="text-xs text-red-500 mt-1">{errors.receipt.message?.toString()}</p>}
@@ -364,7 +384,7 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Teléfono</p>
-                  <p className="font-medium">{pendingData.phoneNumber}</p>
+                  <p className="font-medium">{formatPhoneDisplay(pendingData.phoneNumber)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Fecha y hora</p>

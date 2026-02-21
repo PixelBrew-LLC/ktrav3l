@@ -214,10 +214,13 @@ func (s *EmailService) SendAppointmentConfirmation(appointment *models.Appointme
 	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate.Time)
 	appointmentTime := fmt.Sprintf("%02d:00", appointment.AppointmentHour)
 
-	phoneFormatted := fmt.Sprintf("+1 (%s) %s-%s",
-		appointment.PhoneNumber[0:3],
-		appointment.PhoneNumber[4:7],
-		appointment.PhoneNumber[8:12])
+	var phoneFormatted string
+	phone := appointment.PhoneNumber
+	if len(phone) == 10 {
+		phoneFormatted = fmt.Sprintf("+1(%s) %s-%s", phone[0:3], phone[3:6], phone[6:10])
+	} else {
+		phoneFormatted = phone
+	}
 
 	body := s.getEmailHeader() + `
                 <h1>Reserva Confirmada</h1>
@@ -278,10 +281,13 @@ func (s *EmailService) SendAppointmentApproved(appointment *models.Appointment) 
 	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate.Time)
 	appointmentTime := fmt.Sprintf("%02d:00", appointment.AppointmentHour)
 
-	phoneFormatted := fmt.Sprintf("+1 (%s) %s-%s",
-		appointment.PhoneNumber[0:3],
-		appointment.PhoneNumber[4:7],
-		appointment.PhoneNumber[8:12])
+	var phoneFormatted string
+	phone := appointment.PhoneNumber
+	if len(phone) == 10 {
+		phoneFormatted = fmt.Sprintf("+1(%s) %s-%s", phone[0:3], phone[3:6], phone[6:10])
+	} else {
+		phoneFormatted = phone
+	}
 
 	// Construir sección de meeting link
 	meetingSection := ""
@@ -461,4 +467,79 @@ func (s *EmailService) SendAppointmentMoved(appointment *models.Appointment, old
         ` + s.getEmailFooter()
 
 	return s.sendEmail(appointment.Email, subject, body)
+}
+
+// SendNewAppointmentNotification envía email al admin cuando se crea una nueva cita pública
+func (s *EmailService) SendNewAppointmentNotification(appointment *models.Appointment) error {
+	adminEmail := "victormanuer2010@gmail.com"
+	subject := "Nueva reserva recibida - " + appointment.ShortID
+
+	appointmentDate := s.formatSpanishDate(appointment.AppointmentDate.Time)
+	appointmentTime := fmt.Sprintf("%02d:00", appointment.AppointmentHour)
+
+	phoneFormatted := ""
+	if len(appointment.PhoneNumber) == 10 {
+		phoneFormatted = fmt.Sprintf("+1(%s) %s-%s",
+			appointment.PhoneNumber[0:3],
+			appointment.PhoneNumber[3:6],
+			appointment.PhoneNumber[6:10])
+	} else {
+		phoneFormatted = appointment.PhoneNumber
+	}
+
+	body := s.getEmailHeader() + `
+                <h1>Nueva Reserva Recibida</h1>
+            </div>
+            <div class="content-wrapper">
+                <p class="greeting">Hola <strong>Admin</strong>,</p>
+                <p class="intro-text">Se ha recibido una nueva solicitud de reserva. A continuación los detalles:</p>
+                
+                <div class="info-row">
+                    <span class="info-label">Código de reserva:</span>
+                    <span class="info-value">` + appointment.ShortID + `</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Cliente:</span>
+                    <span class="info-value">` + appointment.FirstName + ` ` + appointment.LastName + `</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">` + appointment.Email + `</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Teléfono:</span>
+                    <span class="info-value">` + phoneFormatted + `</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Tipo de cita:</span>
+                    <span class="info-value">` + appointment.AppointmentType.Name + `</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Fecha:</span>
+                    <span class="info-value">` + appointmentDate + `</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Hora:</span>
+                    <span class="info-value">` + appointmentTime + `</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Estado:</span>
+                    <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pendiente</span>
+                </div>
+
+                <div class="note-box" style="background-color: #f0f9ff; border-left: 4px solid #667eea;">
+                    <strong>Acción requerida:</strong>
+                    Ingresa al panel de administración para revisar y aprobar o rechazar esta reserva:<br>
+                    <a href="` + config.Env.FrontendURL + `/admin/appointments" style="color: #667eea; text-decoration: none; font-weight: 500;">` + config.Env.FrontendURL + `/admin/appointments</a>
+                </div>
+        ` + s.getEmailFooter()
+
+	return s.sendEmail(adminEmail, subject, body)
 }

@@ -10,6 +10,7 @@ import (
 	"pixelbrew-llc/ktrav3l_backend/initializers"
 	"pixelbrew-llc/ktrav3l_backend/models"
 	"pixelbrew-llc/ktrav3l_backend/services"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -52,9 +53,10 @@ func CreateAppointment(c *gin.Context) {
 		return
 	}
 
-	// Validar formato de teléfono (###-###-####)
-	if len(phoneNumber) != 12 || phoneNumber[3] != '-' || phoneNumber[7] != '-' {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid phone format. Use ###-###-####"})
+	// Validar que el teléfono tenga 10 dígitos (ignorar formato)
+	cleanPhone := regexp.MustCompile(`\D`).ReplaceAllString(phoneNumber, "")
+	if len(cleanPhone) != 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "El teléfono debe tener 10 dígitos"})
 		return
 	}
 
@@ -178,12 +180,14 @@ func CreateAppointment(c *gin.Context) {
 		return
 	}
 
+	// cleanPhone ya fue calculado en la validación anterior
+
 	// Crear cita
 	appointment := models.Appointment{
 		FirstName:         firstName,
 		LastName:          lastName,
 		Email:             email,
-		PhoneNumber:       phoneNumber,
+		PhoneNumber:       cleanPhone,
 		AppointmentDate:   appointmentDate,
 		AppointmentHour:   appointmentHour,
 		AppointmentTypeID: uint(appointmentTypeID),
@@ -210,6 +214,13 @@ func CreateAppointment(c *gin.Context) {
 		fmt.Println("Error sending confirmation email:", err)
 	}
 
+	// Notificar al admin de la nueva cita
+	go func() {
+		if err := emailService.SendNewAppointmentNotification(&appointment); err != nil {
+			fmt.Println("Error sending admin notification email:", err)
+		}
+	}()
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Appointment created successfully",
 		"shortID": appointment.ShortID,
@@ -229,10 +240,13 @@ func GetAppointmentByShortID(c *gin.Context) {
 	}
 
 	// Formato del teléfono para mostrar: +1 (###) ###-####
-	phoneFormatted := fmt.Sprintf("+1 (%s) %s-%s",
-		appointment.PhoneNumber[0:3],
-		appointment.PhoneNumber[4:7],
-		appointment.PhoneNumber[8:12])
+	phone := appointment.PhoneNumber
+	var phoneFormatted string
+	if len(phone) == 10 {
+		phoneFormatted = fmt.Sprintf("+1(%s) %s-%s", phone[0:3], phone[3:6], phone[6:10])
+	} else {
+		phoneFormatted = phone
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":              appointment.ID,
